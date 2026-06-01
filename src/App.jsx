@@ -598,161 +598,66 @@ function ProfileScreen({ profile, onSave }) {
   );
 }
 
-// ─── Screen: Family Tree (Hierarchical Layout) ───────────────────────────────
+// ─── Screen: Family Tree (Two Chart Views) ────────────────────────────────────
 //
-// Layout rules (matching reference image):
-//   Row 0 (top)    : Grandparents  — faint/light color, small nodes
-//   Row 1          : Parents + Aunts/Uncles
-//   Row 2 (center) : Self (highlighted) + Spouse — prominent gold cards
-//   Row 3          : Brothers/Sisters
-//   Row 4          : Sons/Daughters
-//   Row 5 (bottom) : Grandchildren (if any)
+// View 1 – "All Generations": Full tree showing all relationships
+// View 2 – "My Lineage":      Self + Spouse + all descendants only
 //
-// Couple connections draw a short horizontal bracket.
-// Parent→child lines drop from midpoint of couple bracket to child node top.
 
-const TREE_ROW = {
-  Grandfather: 0, Grandmother: 0,
-  Father: 1, Mother: 1, Uncle: 1, Aunt: 1,
-  Self: 2, Spouse: 2,
-  Brother: 3, Sister: 3, Cousin: 3,
-  Son: 4, Daughter: 4,
-  Other: 4,
-};
-const ROW_Y    = [60, 200, 340, 480, 620, 760];
-const NODE_W   = 110;
-const NODE_H   = 52;
-const COL_GAP  = 24;
+// ── Shared constants ──────────────────────────────────────────────────────────
+const NODE_W = 110;
+const NODE_H = 52;
+const COL_GAP = 24;
+const CANVAS_W = 700;
 
-// Assign pixel positions based on relationship group, centering within each row
-function computeLayout(members) {
-  const rows = {};
-  members.forEach(m => {
-    const row = TREE_ROW[m.relation] ?? 4;
-    if (!rows[row]) rows[row] = [];
-    rows[row].push(m);
-  });
-
-  // Sort rows: Self first in row 2, couple pairs together
-  const COUPLE_ORDER = ["Grandfather","Grandmother","Father","Mother","Uncle","Aunt","Self","Spouse","Brother","Sister","Cousin","Son","Daughter","Other"];
-  Object.keys(rows).forEach(r => {
-    rows[r].sort((a, b) => COUPLE_ORDER.indexOf(a.relation) - COUPLE_ORDER.indexOf(b.relation));
-  });
-
-  const positions = {};
-  const CANVAS_W = 600; // virtual canvas, we'll center to screen
-
-  Object.entries(rows).forEach(([row, mems]) => {
-    const totalW = mems.length * NODE_W + (mems.length - 1) * COL_GAP;
-    const startX = (CANVAS_W - totalW) / 2;
-    mems.forEach((m, i) => {
-      positions[m.id] = {
-        x: startX + i * (NODE_W + COL_GAP),
-        y: ROW_Y[row] || (parseInt(row) * 140 + 60),
-        row: parseInt(row),
-      };
-    });
-  });
-
-  return positions;
+// ── Shared: node style by relation ───────────────────────────────────────────
+function getNodeStyle(relation) {
+  if (relation === "Self")        return { fill: "#fbbf24", stroke: "#f59e0b", strokeW: 3,   textColor: "#1a2a4a", subColor: "#92400e", labelSize: 11, nameSize: 13 };
+  if (relation === "Spouse")      return { fill: "#fde68a", stroke: "#fbbf24", strokeW: 2,   textColor: "#1a2a4a", subColor: "#78350f", labelSize: 10, nameSize: 11 };
+  if (relation === "Grandfather" || relation === "Grandmother")
+                                  return { fill: "#fef9ee", stroke: "#fde68a", strokeW: 1.5, textColor: "#6b7280", subColor: "#9ca3af", labelSize: 9,  nameSize: 10 };
+  if (relation === "Father" || relation === "Mother")
+                                  return { fill: "#fffbeb", stroke: "#fcd34d", strokeW: 1.5, textColor: "#374151", subColor: "#6b7280", labelSize: 9,  nameSize: 11 };
+  return { fill: "#fef3c7", stroke: "#fbbf24", strokeW: 1.5, textColor: "#1a2a4a", subColor: "#6b7280", labelSize: 9, nameSize: 11 };
 }
 
-// Draw connector lines between nodes
-function TreeConnectors({ members, positions }) {
-  const PINK  = "#f472b6";
-  const GRAY  = "#c8cfe0";
-  const lines = [];
-
-  // Couple brackets (horizontal line between couple nodes)
-  const coupleRelPairs = [
-    ["Grandfather","Grandmother"],
-    ["Father","Mother"],
-    ["Self","Spouse"],
-  ];
-  coupleRelPairs.forEach(([relA, relB]) => {
-    const a = members.find(m => m.relation === relA);
-    const b = members.find(m => m.relation === relB);
-    if (!a || !b || !positions[a.id] || !positions[b.id]) return;
-    const pa = positions[a.id], pb = positions[b.id];
-    const ax = pa.x + NODE_W / 2, ay = pa.y + NODE_H / 2;
-    const bx = pb.x + NODE_W / 2, by = pb.y + NODE_H / 2;
-    lines.push(<line key={`couple-${relA}`} x1={ax} y1={ay} x2={bx} y2={by} stroke={PINK} strokeWidth={2.5} strokeDasharray="5,3" />);
-  });
-
-  // Parent → child lines
-  // Grandparents → Father (midpoint of gp couple → top of Father)
-  const drawParentChild = (parentRelA, parentRelB, childRels, key) => {
-    const pA = members.find(m => m.relation === parentRelA);
-    const pB = members.find(m => m.relation === parentRelB);
-    const children = members.filter(m => childRels.includes(m.relation));
-    if (!children.length) return;
-
-    let originX, originY;
-    if (pA && pB && positions[pA.id] && positions[pB.id]) {
-      originX = (positions[pA.id].x + NODE_W / 2 + positions[pB.id].x + NODE_W / 2) / 2;
-      originY = positions[pA.id].y + NODE_H;
-    } else if (pA && positions[pA.id]) {
-      originX = positions[pA.id].x + NODE_W / 2;
-      originY = positions[pA.id].y + NODE_H;
-    } else if (pB && positions[pB.id]) {
-      originX = positions[pB.id].x + NODE_W / 2;
-      originY = positions[pB.id].y + NODE_H;
-    } else return;
-
-    if (children.length === 1) {
-      const c = children[0];
-      if (!positions[c.id]) return;
-      const cx = positions[c.id].x + NODE_W / 2;
-      const cy = positions[c.id].y;
-      const midY = (originY + cy) / 2;
-      lines.push(
-        <path key={`pc-${key}-${c.id}`}
-          d={`M${originX},${originY} L${originX},${midY} L${cx},${midY} L${cx},${cy}`}
-          fill="none" stroke={PINK} strokeWidth={2} />
-      );
-    } else {
-      // horizontal bus line, then verticals to each child
-      const firstC = children[0], lastC = children[children.length - 1];
-      if (!positions[firstC.id] || !positions[lastC.id]) return;
-      const childrenY = positions[firstC.id].y;
-      const midY = (originY + childrenY) / 2;
-      const busX1 = positions[firstC.id].x + NODE_W / 2;
-      const busX2 = positions[lastC.id].x + NODE_W / 2;
-
-      lines.push(<line key={`bus-down-${key}`} x1={originX} y1={originY} x2={originX} y2={midY} stroke={PINK} strokeWidth={2} />);
-      lines.push(<line key={`bus-h-${key}`} x1={busX1} y1={midY} x2={busX2} y2={midY} stroke={PINK} strokeWidth={2} />);
-      children.forEach(c => {
-        if (!positions[c.id]) return;
-        const cx = positions[c.id].x + NODE_W / 2;
-        lines.push(<line key={`pc-${key}-${c.id}`} x1={cx} y1={midY} x2={cx} y2={positions[c.id].y} stroke={PINK} strokeWidth={2} />);
-      });
-    }
-  };
-
-  drawParentChild("Grandfather","Grandmother", ["Father","Mother","Uncle","Aunt"], "gp");
-  drawParentChild("Father","Mother", ["Self","Brother","Sister"], "parents");
-  drawParentChild("Uncle","Aunt",   ["Cousin"], "uncle");
-  drawParentChild("Self","Spouse",  ["Son","Daughter"], "self");
-
-  return <>{lines}</>;
+// ── Shared: render a single node ─────────────────────────────────────────────
+function TreeNode({ m, pos, onClick }) {
+  if (!pos) return null;
+  const s = getNodeStyle(m.relation);
+  const isSelf = m.relation === "Self";
+  const name = fullName(m);
+  const shortName = name.length > 14 ? name.slice(0, 13) + "…" : name;
+  return (
+    <g transform={`translate(${pos.x},${pos.y})`} data-node="1" onClick={onClick} style={{ cursor: "pointer" }}>
+      {isSelf && <rect x={3} y={4} width={NODE_W} height={NODE_H} rx={10} fill="#f59e0b" opacity={0.25} />}
+      <rect x={0} y={0} width={NODE_W} height={NODE_H} rx={10} fill={s.fill} stroke={s.stroke} strokeWidth={s.strokeW} />
+      <text x={NODE_W / 2} y={isSelf ? 22 : 20} textAnchor="middle" fill={s.textColor}
+        fontSize={s.nameSize} fontWeight={isSelf ? 900 : 700} fontFamily="'DM Sans', sans-serif"
+        letterSpacing={isSelf ? "0.04em" : "0"}>
+        {shortName.toUpperCase()}
+      </text>
+      <text x={NODE_W / 2} y={isSelf ? 38 : 35} textAnchor="middle" fill={s.subColor}
+        fontSize={s.labelSize} fontFamily="'DM Sans', sans-serif">
+        {m.relation}
+      </text>
+      {isSelf && m.dob && (
+        <text x={NODE_W / 2} y={48} textAnchor="middle" fill="#92400e" fontSize={8} fontFamily="'DM Sans',sans-serif">
+          {m.dob}
+        </text>
+      )}
+    </g>
+  );
 }
 
-function FamilyTreeScreen({ members, setMembers, connections, setConnections }) {
-  const [zoom,       setZoom]       = useState(0.85);
-  const [panOffset,  setPanOffset]  = useState({ x: 0, y: 40 });
-  const [isPanning,  setIsPanning]  = useState(false);
-  const [panStart,   setPanStart]   = useState({ x: 0, y: 0 });
-  const [showAdd,    setShowAdd]    = useState(false);
-  const [showDetail, setShowDetail] = useState(null);
-  const [showEdit,   setShowEdit]   = useState(null);
-  const [toast,      setToast]      = useState(null);
-  const svgRef = useRef();
+// ── Shared: SVG canvas wrapper ────────────────────────────────────────────────
+function TreeCanvas({ positions, members, onNodeClick, children }) {
+  const [zoom, setZoom] = useState(0.85);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 40 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const touchPanStart = useRef(null);
 
-  const doToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2000); };
-
-  const positions = computeLayout(members);
-
-  // ── Pan canvas ──
   const onSvgMouseDown = (e) => {
     if (e.target.closest && e.target.closest("[data-node]")) return;
     setIsPanning(true);
@@ -763,33 +668,258 @@ function FamilyTreeScreen({ members, setMembers, connections, setConnections }) 
   }, [isPanning, panStart]);
   const onMouseUp = () => setIsPanning(false);
 
-  // Touch pan
-  const touchPanStart = useRef(null);
   const onTouchStartSvg = (e) => {
-    if (e.touches.length === 1) {
+    if (e.touches.length === 1)
       touchPanStart.current = { x: e.touches[0].clientX - panOffset.x, y: e.touches[0].clientY - panOffset.y };
-    }
   };
   const onTouchMoveSvg = (e) => {
-    if (e.touches.length === 1 && touchPanStart.current) {
+    if (e.touches.length === 1 && touchPanStart.current)
       setPanOffset({ x: e.touches[0].clientX - touchPanStart.current.x, y: e.touches[0].clientY - touchPanStart.current.y });
+  };
+
+  return (
+    <div style={{ flex: 1, overflow: "hidden", position: "relative", background: "#f7f9fc", display: "flex", flexDirection: "column" }}>
+      {/* Zoom controls */}
+      <div style={{ position: "absolute", top: 10, right: 10, zIndex: 10, display: "flex", gap: 4, alignItems: "center", background: "rgba(255,255,255,0.9)", borderRadius: 10, padding: "4px 8px", boxShadow: "0 1px 6px rgba(0,0,0,0.1)" }}>
+        <button onClick={() => setZoom(z => Math.min(2, +(z + 0.15).toFixed(2)))} style={{ width: 26, height: 26, background: "none", border: "none", cursor: "pointer", color: "#374151", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+        <span style={{ fontSize: 11, color: "#6b7280", minWidth: 32, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
+        <button onClick={() => setZoom(z => Math.max(0.3, +(z - 0.15).toFixed(2)))} style={{ width: 26, height: 26, background: "none", border: "none", cursor: "pointer", color: "#374151", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+        <button onClick={() => { setZoom(0.85); setPanOffset({ x: 0, y: 40 }); }} style={{ width: 26, height: 26, background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>⌂</button>
+      </div>
+      <svg width="100%" height="100%"
+        style={{ cursor: isPanning ? "grabbing" : "grab", touchAction: "none", userSelect: "none" }}
+        onMouseDown={onSvgMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+        onTouchStart={onTouchStartSvg} onTouchMove={onTouchMoveSvg} onTouchEnd={() => { touchPanStart.current = null; }}
+      >
+        <defs>
+          <pattern id="dots2" width="30" height="30" patternUnits="userSpaceOnUse">
+            <circle cx="15" cy="15" r="1.2" fill="#c8cfe0" opacity="0.5" />
+          </pattern>
+        </defs>
+        <rect x="-5000" y="-5000" width="12000" height="12000" fill="url(#dots2)" />
+        <g transform={`translate(${panOffset.x},${panOffset.y}) scale(${zoom})`}>
+          {children({ positions, members, onNodeClick })}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHART 1 – All Generations
+// Shows the entire family across all generations, laid out by relationship row.
+// ═══════════════════════════════════════════════════════════════════════════════
+const ALL_GEN_ROW = {
+  Grandfather: 0, Grandmother: 0,
+  Father: 1, Mother: 1, Uncle: 1, Aunt: 1,
+  Self: 2, Spouse: 2,
+  Brother: 3, Sister: 3, Cousin: 3,
+  Son: 4, Daughter: 4,
+  Other: 4,
+};
+const ALL_GEN_ROW_Y = [60, 200, 340, 480, 620, 760];
+const ALL_GEN_ORDER = ["Grandfather","Grandmother","Father","Mother","Uncle","Aunt","Self","Spouse","Brother","Sister","Cousin","Son","Daughter","Other"];
+
+function computeAllGenLayout(members) {
+  const rows = {};
+  members.forEach(m => {
+    const row = ALL_GEN_ROW[m.relation] ?? 4;
+    if (!rows[row]) rows[row] = [];
+    rows[row].push(m);
+  });
+  Object.keys(rows).forEach(r => {
+    rows[r].sort((a, b) => ALL_GEN_ORDER.indexOf(a.relation) - ALL_GEN_ORDER.indexOf(b.relation));
+  });
+  const positions = {};
+  Object.entries(rows).forEach(([row, mems]) => {
+    const totalW = mems.length * NODE_W + (mems.length - 1) * COL_GAP;
+    const startX = (CANVAS_W - totalW) / 2;
+    mems.forEach((m, i) => {
+      positions[m.id] = { x: startX + i * (NODE_W + COL_GAP), y: ALL_GEN_ROW_Y[row] || (parseInt(row) * 140 + 60), row: parseInt(row) };
+    });
+  });
+  return positions;
+}
+
+function AllGenConnectors({ members, positions }) {
+  const PINK = "#f472b6";
+  const lines = [];
+
+  const coupleRelPairs = [["Grandfather","Grandmother"],["Father","Mother"],["Self","Spouse"]];
+  coupleRelPairs.forEach(([relA, relB]) => {
+    const a = members.find(m => m.relation === relA);
+    const b = members.find(m => m.relation === relB);
+    if (!a || !b || !positions[a.id] || !positions[b.id]) return;
+    const ax = positions[a.id].x + NODE_W / 2, ay = positions[a.id].y + NODE_H / 2;
+    const bx = positions[b.id].x + NODE_W / 2, by = positions[b.id].y + NODE_H / 2;
+    lines.push(<line key={`cp-${relA}`} x1={ax} y1={ay} x2={bx} y2={by} stroke={PINK} strokeWidth={2.5} strokeDasharray="5,3" />);
+  });
+
+  const drawParentChild = (parentRelA, parentRelB, childRels, key) => {
+    const pA = members.find(m => m.relation === parentRelA);
+    const pB = members.find(m => m.relation === parentRelB);
+    const children = members.filter(m => childRels.includes(m.relation));
+    if (!children.length) return;
+    let originX, originY;
+    if (pA && pB && positions[pA.id] && positions[pB.id]) {
+      originX = (positions[pA.id].x + NODE_W / 2 + positions[pB.id].x + NODE_W / 2) / 2;
+      originY = positions[pA.id].y + NODE_H;
+    } else if (pA && positions[pA.id]) { originX = positions[pA.id].x + NODE_W / 2; originY = positions[pA.id].y + NODE_H; }
+    else if (pB && positions[pB.id]) { originX = positions[pB.id].x + NODE_W / 2; originY = positions[pB.id].y + NODE_H; }
+    else return;
+    if (children.length === 1) {
+      const c = children[0]; if (!positions[c.id]) return;
+      const cx = positions[c.id].x + NODE_W / 2, cy = positions[c.id].y, midY = (originY + cy) / 2;
+      lines.push(<path key={`pc-${key}-${c.id}`} d={`M${originX},${originY} L${originX},${midY} L${cx},${midY} L${cx},${cy}`} fill="none" stroke={PINK} strokeWidth={2} />);
+    } else {
+      const firstC = children[0], lastC = children[children.length - 1];
+      if (!positions[firstC.id] || !positions[lastC.id]) return;
+      const childrenY = positions[firstC.id].y, midY = (originY + childrenY) / 2;
+      const busX1 = positions[firstC.id].x + NODE_W / 2, busX2 = positions[lastC.id].x + NODE_W / 2;
+      lines.push(<line key={`bd-${key}`} x1={originX} y1={originY} x2={originX} y2={midY} stroke={PINK} strokeWidth={2} />);
+      lines.push(<line key={`bh-${key}`} x1={busX1} y1={midY} x2={busX2} y2={midY} stroke={PINK} strokeWidth={2} />);
+      children.forEach(c => {
+        if (!positions[c.id]) return;
+        lines.push(<line key={`pcc-${key}-${c.id}`} x1={positions[c.id].x + NODE_W / 2} y1={midY} x2={positions[c.id].x + NODE_W / 2} y2={positions[c.id].y} stroke={PINK} strokeWidth={2} />);
+      });
     }
   };
 
-  // ── Node style by relation ──
-  const nodeStyle = (m) => {
-    const isSelf   = m.relation === "Self";
-    const isSpouse = m.relation === "Spouse";
-    const isGP     = m.relation === "Grandfather" || m.relation === "Grandmother";
-    const isParent = m.relation === "Father" || m.relation === "Mother";
+  drawParentChild("Grandfather","Grandmother", ["Father","Mother","Uncle","Aunt"], "gp");
+  drawParentChild("Father","Mother", ["Self","Brother","Sister"], "parents");
+  drawParentChild("Uncle","Aunt", ["Cousin"], "uncle");
+  drawParentChild("Self","Spouse", ["Son","Daughter"], "self");
+  return <>{lines}</>;
+}
 
-    if (isSelf)   return { fill: "#fbbf24", stroke: "#f59e0b", strokeW: 3, textColor: "#1a2a4a", subColor: "#92400e", labelSize: 11, nameSize: 13 };
-    if (isSpouse) return { fill: "#fde68a", stroke: "#fbbf24", strokeW: 2, textColor: "#1a2a4a", subColor: "#78350f", labelSize: 10, nameSize: 11 };
-    if (isGP)     return { fill: "#fef9ee", stroke: "#fde68a", strokeW: 1.5, textColor: "#6b7280", subColor: "#9ca3af", labelSize: 9,  nameSize: 10 };
-    if (isParent) return { fill: "#fffbeb", stroke: "#fcd34d", strokeW: 1.5, textColor: "#374151", subColor: "#6b7280", labelSize: 9,  nameSize: 11 };
-    // siblings, children etc.
-    return { fill: "#fef3c7", stroke: "#fbbf24", strokeW: 1.5, textColor: "#1a2a4a", subColor: "#6b7280", labelSize: 9, nameSize: 11 };
-  };
+function AllGenerationsChart({ members, onNodeClick }) {
+  const positions = computeAllGenLayout(members);
+  return (
+    <TreeCanvas positions={positions} members={members} onNodeClick={onNodeClick}>
+      {({ positions, members, onNodeClick }) => (
+        <>
+          <AllGenConnectors members={members} positions={positions} />
+          {members.map(m => (
+            <TreeNode key={m.id} m={m} pos={positions[m.id]} onClick={() => onNodeClick(m.id)} />
+          ))}
+        </>
+      )}
+    </TreeCanvas>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHART 2 – My Lineage (Self + all next generations)
+// Shows: Self at top, then Spouse, then Sons/Daughters, then Grandchildren.
+// ═══════════════════════════════════════════════════════════════════════════════
+const LINEAGE_RELS = ["Self", "Spouse", "Son", "Daughter", "Other"];
+
+const LINEAGE_ROW = { Self: 0, Spouse: 0, Son: 1, Daughter: 1, Other: 1 };
+const LINEAGE_ROW_Y = [60, 220, 380, 540];
+const LINEAGE_ORDER = ["Self","Spouse","Son","Daughter","Other"];
+
+function computeLineageLayout(members) {
+  const lineageMembers = members.filter(m => LINEAGE_RELS.includes(m.relation));
+  const rows = {};
+  lineageMembers.forEach(m => {
+    const row = LINEAGE_ROW[m.relation] ?? 1;
+    if (!rows[row]) rows[row] = [];
+    rows[row].push(m);
+  });
+  Object.keys(rows).forEach(r => {
+    rows[r].sort((a, b) => LINEAGE_ORDER.indexOf(a.relation) - LINEAGE_ORDER.indexOf(b.relation));
+  });
+  const positions = {};
+  Object.entries(rows).forEach(([row, mems]) => {
+    const totalW = mems.length * NODE_W + (mems.length - 1) * COL_GAP;
+    const startX = (CANVAS_W - totalW) / 2;
+    mems.forEach((m, i) => {
+      positions[m.id] = { x: startX + i * (NODE_W + COL_GAP), y: LINEAGE_ROW_Y[parseInt(row)] || (parseInt(row) * 160 + 60), row: parseInt(row) };
+    });
+  });
+  return { positions, lineageMembers };
+}
+
+function LineageConnectors({ members, positions }) {
+  const PINK = "#f472b6";
+  const lines = [];
+
+  // Self ↔ Spouse couple line
+  const self   = members.find(m => m.relation === "Self");
+  const spouse = members.find(m => m.relation === "Spouse");
+  if (self && spouse && positions[self.id] && positions[spouse.id]) {
+    const ax = positions[self.id].x + NODE_W / 2, ay = positions[self.id].y + NODE_H / 2;
+    const bx = positions[spouse.id].x + NODE_W / 2, by = positions[spouse.id].y + NODE_H / 2;
+    lines.push(<line key="couple-self" x1={ax} y1={ay} x2={bx} y2={by} stroke={PINK} strokeWidth={2.5} strokeDasharray="5,3" />);
+  }
+
+  // Self+Spouse → children
+  const children = members.filter(m => ["Son","Daughter","Other"].includes(m.relation));
+  if (children.length && (self || spouse)) {
+    const anchor = self && positions[self.id] ? self : spouse;
+    const anchorB = spouse && positions[spouse.id] && self && positions[self.id] ? spouse : null;
+    if (!anchor || !positions[anchor.id]) return <>{lines}</>;
+    let originX = positions[anchor.id].x + NODE_W / 2;
+    if (anchorB) originX = (positions[self.id].x + NODE_W / 2 + positions[spouse.id].x + NODE_W / 2) / 2;
+    const originY = positions[anchor.id].y + NODE_H;
+    if (children.length === 1) {
+      const c = children[0]; if (!positions[c.id]) return <>{lines}</>;
+      const cx = positions[c.id].x + NODE_W / 2, cy = positions[c.id].y, midY = (originY + cy) / 2;
+      lines.push(<path key="self-child" d={`M${originX},${originY} L${originX},${midY} L${cx},${midY} L${cx},${cy}`} fill="none" stroke={PINK} strokeWidth={2} />);
+    } else {
+      const firstC = children[0], lastC = children[children.length - 1];
+      if (!positions[firstC.id] || !positions[lastC.id]) return <>{lines}</>;
+      const childrenY = positions[firstC.id].y, midY = (originY + childrenY) / 2;
+      const busX1 = positions[firstC.id].x + NODE_W / 2, busX2 = positions[lastC.id].x + NODE_W / 2;
+      lines.push(<line key="lin-down" x1={originX} y1={originY} x2={originX} y2={midY} stroke={PINK} strokeWidth={2} />);
+      lines.push(<line key="lin-bus" x1={busX1} y1={midY} x2={busX2} y2={midY} stroke={PINK} strokeWidth={2} />);
+      children.forEach(c => {
+        if (!positions[c.id]) return;
+        lines.push(<line key={`lc-${c.id}`} x1={positions[c.id].x + NODE_W / 2} y1={midY} x2={positions[c.id].x + NODE_W / 2} y2={positions[c.id].y} stroke={PINK} strokeWidth={2} />);
+      });
+    }
+  }
+  return <>{lines}</>;
+}
+
+function MyLineageChart({ members, onNodeClick }) {
+  const { positions, lineageMembers } = computeLineageLayout(members);
+
+  if (lineageMembers.length === 0) {
+    return (
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: C.muted, gap: 8 }}>
+        <div style={{ fontSize: 36 }}>👤</div>
+        <div style={{ fontSize: 14 }}>Add yourself first (relation: Self)</div>
+        <div style={{ fontSize: 12, color: C.dim }}>Then add Spouse, Sons, Daughters to see your lineage</div>
+      </div>
+    );
+  }
+
+  return (
+    <TreeCanvas positions={positions} members={lineageMembers} onNodeClick={onNodeClick}>
+      {({ positions, members, onNodeClick }) => (
+        <>
+          <LineageConnectors members={members} positions={positions} />
+          {members.map(m => (
+            <TreeNode key={m.id} m={m} pos={positions[m.id]} onClick={() => onNodeClick(m.id)} />
+          ))}
+        </>
+      )}
+    </TreeCanvas>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FamilyTreeScreen – wraps both charts with a tab toggle
+// ═══════════════════════════════════════════════════════════════════════════════
+function FamilyTreeScreen({ members, setMembers, connections, setConnections }) {
+  const [chartView,  setChartView]  = useState("all"); // "all" | "lineage"
+  const [showAdd,    setShowAdd]    = useState(false);
+  const [showDetail, setShowDetail] = useState(null);
+  const [showEdit,   setShowEdit]   = useState(null);
+  const [toast,      setToast]      = useState(null);
+
+  const doToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2000); };
 
   // ── Add member ──
   const AddModal = () => {
@@ -797,13 +927,7 @@ function FamilyTreeScreen({ members, setMembers, connections, setConnections }) 
     const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
     const add = () => {
       if (!form.firstName) return;
-      const row = TREE_ROW[form.relation] ?? 4;
-      setMembers(ms => [...ms, {
-        id: Date.now(), ...form,
-        gen: row,
-        x: 80 + Math.random() * 200, y: ROW_Y[row] || 400,
-        color: GEN_COLORS[row % GEN_COLORS.length],
-      }]);
+      setMembers(ms => [...ms, { id: Date.now(), ...form, gen: 0, x: 80, y: 80, color: GEN_COLORS[0] }]);
       setShowAdd(false); doToast("Member added");
     };
     return (
@@ -874,26 +998,52 @@ function FamilyTreeScreen({ members, setMembers, connections, setConnections }) 
 
   const detail = showDetail ? members.find(m => m.id === showDetail) : null;
 
+  // Legend items for each chart type
+  const allGenLegend = [
+    { label: "Grandparents", fill: "#fef9ee", stroke: "#fde68a" },
+    { label: "Parents",      fill: "#fffbeb", stroke: "#fcd34d" },
+    { label: "Self / Spouse",fill: "#fbbf24", stroke: "#f59e0b" },
+    { label: "Children",     fill: "#fef3c7", stroke: "#fbbf24" },
+  ];
+  const lineageLegend = [
+    { label: "Self",         fill: "#fbbf24", stroke: "#f59e0b" },
+    { label: "Spouse",       fill: "#fde68a", stroke: "#fbbf24" },
+    { label: "Children",     fill: "#fef3c7", stroke: "#fbbf24" },
+  ];
+  const legend = chartView === "all" ? allGenLegend : lineageLegend;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: C.bg }}>
-        <div style={{ fontFamily: "'Playfair Display',Georgia,serif", fontSize: 16, fontWeight: 800, color: C.text, flex: 1 }}>Family Tree</div>
-        <button onClick={() => setZoom(z => Math.min(2, +(z + 0.15).toFixed(2)))} style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.text, fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-        <span style={{ fontSize: 11, color: C.dim, minWidth: 36, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom(z => Math.max(0.3, +(z - 0.15).toFixed(2)))} style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.text, fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-        <button onClick={() => { setZoom(0.85); setPanOffset({ x: 0, y: 40 }); }} style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.muted, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>⌂</button>
+        <div style={{ fontFamily: "'Playfair Display',Georgia,serif", fontSize: 16, fontWeight: 800, color: C.text, flex: 1 }}>Family Chart</div>
         <Btn label="Add" icon="plus" small onClick={() => setShowAdd(true)} />
       </div>
 
-      {/* Legend */}
-      <div style={{ display: "flex", gap: 14, padding: "6px 14px", borderBottom: `1px solid ${C.border}`, overflowX: "auto", flexShrink: 0, background: C.bg }}>
+      {/* Chart type toggle */}
+      <div style={{ display: "flex", padding: "10px 14px 0", gap: 8, background: C.bg, flexShrink: 0 }}>
         {[
-          { label: "Grandparents", fill: "#fef9ee", stroke: "#fde68a" },
-          { label: "Parents",      fill: "#fffbeb", stroke: "#fcd34d" },
-          { label: "Self / Spouse",fill: "#fbbf24", stroke: "#f59e0b" },
-          { label: "Children",     fill: "#fef3c7", stroke: "#fbbf24" },
-        ].map(l => (
+          { id: "all",     label: "🌳  All Generations",  desc: "Full family across all relationships" },
+          { id: "lineage", label: "👤  My Lineage",        desc: "You and all descendants" },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setChartView(tab.id)}
+            style={{
+              flex: 1, padding: "10px 12px", borderRadius: "10px 10px 0 0", border: `1px solid ${C.border}`,
+              borderBottom: chartView === tab.id ? `1px solid ${C.bg}` : `1px solid ${C.border}`,
+              background: chartView === tab.id ? C.bg : C.surface,
+              cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+              color: chartView === tab.id ? C.accent : C.muted,
+              transition: "all .15s",
+            }}>
+            <div style={{ fontSize: 12, fontWeight: 700 }}>{tab.label}</div>
+            <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>{tab.desc}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Legend strip */}
+      <div style={{ display: "flex", gap: 14, padding: "6px 14px", borderBottom: `1px solid ${C.border}`, borderTop: `1px solid ${C.border}`, overflowX: "auto", flexShrink: 0, background: C.bg }}>
+        {legend.map(l => (
           <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
             <div style={{ width: 16, height: 10, borderRadius: 3, background: l.fill, border: `1.5px solid ${l.stroke}` }} />
             <span style={{ fontSize: 10, color: C.muted }}>{l.label}</span>
@@ -902,95 +1052,12 @@ function FamilyTreeScreen({ members, setMembers, connections, setConnections }) 
         <div style={{ marginLeft: "auto", fontSize: 10, color: C.dim, flexShrink: 0 }}>Drag to pan</div>
       </div>
 
-      {/* SVG Canvas */}
-      <div style={{ flex: 1, overflow: "hidden", position: "relative", background: "#f7f9fc" }}>
-        <svg
-          ref={svgRef} width="100%" height="100%"
-          style={{ cursor: isPanning ? "grabbing" : "grab", touchAction: "none", userSelect: "none" }}
-          onMouseDown={onSvgMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onMouseLeave={onMouseUp}
-          onTouchStart={onTouchStartSvg}
-          onTouchMove={onTouchMoveSvg}
-          onTouchEnd={() => { touchPanStart.current = null; }}
-        >
-          <defs>
-            <pattern id="dots" width="30" height="30" patternUnits="userSpaceOnUse">
-              <circle cx="15" cy="15" r="1.2" fill="#c8cfe0" opacity="0.5" />
-            </pattern>
-            {members.map(m => (
-              <clipPath key={m.id} id={`clip-${m.id}`}>
-                <rect x={0} y={0} width={NODE_W} height={NODE_H} rx={10} />
-              </clipPath>
-            ))}
-          </defs>
-
-          {/* Dotted background */}
-          <rect x="-5000" y="-5000" width="12000" height="12000" fill="url(#dots)" />
-
-          <g transform={`translate(${panOffset.x},${panOffset.y}) scale(${zoom})`}>
-
-            {/* Connector lines */}
-            <TreeConnectors members={members} positions={positions} />
-
-            {/* Member nodes */}
-            {members.map(m => {
-              const pos = positions[m.id];
-              if (!pos) return null;
-              const s = nodeStyle(m);
-              const isSelf = m.relation === "Self";
-              const name = fullName(m);
-              const shortName = name.length > 14 ? name.slice(0, 13) + "…" : name;
-
-              return (
-                <g key={m.id}
-                  transform={`translate(${pos.x},${pos.y})`}
-                  data-node="1"
-                  onClick={() => setShowDetail(m.id)}
-                  style={{ cursor: "pointer" }}
-                >
-                  {/* Shadow for Self */}
-                  {isSelf && <rect x={3} y={4} width={NODE_W} height={NODE_H} rx={10} fill="#f59e0b" opacity={0.25} />}
-
-                  {/* Card rect */}
-                  <rect x={0} y={0} width={NODE_W} height={NODE_H} rx={10}
-                    fill={s.fill} stroke={s.stroke} strokeWidth={s.strokeW}
-                  />
-
-                  {/* Name */}
-                  <text x={NODE_W / 2} y={isSelf ? 22 : 20}
-                    textAnchor="middle"
-                    fill={s.textColor}
-                    fontSize={s.nameSize}
-                    fontWeight={isSelf ? 900 : 700}
-                    fontFamily="'DM Sans', sans-serif"
-                    letterSpacing={isSelf ? "0.04em" : "0"}
-                  >
-                    {shortName.toUpperCase()}
-                  </text>
-
-                  {/* Relation label */}
-                  <text x={NODE_W / 2} y={isSelf ? 38 : 35}
-                    textAnchor="middle"
-                    fill={s.subColor}
-                    fontSize={s.labelSize}
-                    fontFamily="'DM Sans', sans-serif"
-                  >
-                    {m.relation}
-                  </text>
-
-                  {/* DOB if Self */}
-                  {isSelf && m.dob && (
-                    <text x={NODE_W / 2} y={48} textAnchor="middle" fill="#92400e" fontSize={8} fontFamily="'DM Sans',sans-serif">
-                      {m.dob}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+      {/* Chart area */}
+      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {chartView === "all"
+          ? <AllGenerationsChart members={members} onNodeClick={id => setShowDetail(id)} />
+          : <MyLineageChart      members={members} onNodeClick={id => setShowDetail(id)} />
+        }
       </div>
 
       {/* Member detail sheet */}
@@ -1022,9 +1089,9 @@ function FamilyTreeScreen({ members, setMembers, connections, setConnections }) 
         </Modal>
       )}
 
-      {showAdd && <AddModal />}
+      {showAdd  && <AddModal />}
       {showEdit && <EditModal member={showEdit} />}
-      {toast && <Toast {...toast} />}
+      {toast    && <Toast {...toast} />}
     </div>
   );
 }
@@ -1236,10 +1303,19 @@ function BottomNav({ active, onNav }) {
   );
 }
 
+// ── Tab display names ─────────────────────────────────────────────────────────
+const TAB_TITLES = {
+  tree:     "Family Chart",
+  profile:  "My Profile",
+  search:   "Search",
+  settings: "Settings",
+};
+
 // ─── Root App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [authed,  setAuthed]  = useState(() => LS.get("ml_authed", false));
   const [tab,     setTab]     = useState("dashboard");
+  const [history, setHistory] = useState([]); // navigation history stack
   const [profile, setProfile] = useState(() => LS.get("ml_profile", DEFAULT_PROFILE));
   const [members, setMembersRaw] = useState(() => LS.get("ml_members", DEFAULT_MEMBERS));
   const [conns,   setConnsRaw]   = useState(() => LS.get("ml_conns",   DEFAULT_CONNECTIONS));
@@ -1247,9 +1323,26 @@ export default function App() {
   const setMembers = (v) => { const next = typeof v === "function" ? v(members) : v; setMembersRaw(next); LS.set("ml_members", next); };
   const setConns   = (v) => { const next = typeof v === "function" ? v(conns)   : v; setConnsRaw(next);   LS.set("ml_conns",   next); };
 
-  const handleLogin  = (u) => { LS.set("ml_authed", true); setAuthed(true); };
-  const handleLogout = () => { LS.set("ml_authed", false); setAuthed(false); setTab("dashboard"); };
+  const handleLogin  = () => { LS.set("ml_authed", true); setAuthed(true); };
+  const handleLogout = () => { LS.set("ml_authed", false); setAuthed(false); setTab("dashboard"); setHistory([]); };
   const saveProfile  = (p) => { setProfile(p); LS.set("ml_profile", p); };
+
+  // Navigate forward, pushing current tab onto history
+  const navigate = (newTab) => {
+    if (newTab === tab) return;
+    setHistory(h => newTab === "dashboard" ? [] : [...h, tab]);
+    setTab(newTab);
+  };
+
+  // Go back one step
+  const goBack = () => {
+    if (history.length === 0) { setTab("dashboard"); return; }
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setTab(prev);
+  };
+
+  const canGoBack = tab !== "dashboard";
 
   if (!authed) return (
     <>
@@ -1259,7 +1352,7 @@ export default function App() {
   );
 
   const renderTab = () => {
-    if (tab === "dashboard") return <Dashboard profile={profile} members={members} onNav={setTab} />;
+    if (tab === "dashboard") return <Dashboard profile={profile} members={members} onNav={navigate} />;
     if (tab === "tree")      return <FamilyTreeScreen members={members} setMembers={setMembers} connections={conns} setConnections={setConns} />;
     if (tab === "profile")   return <ProfileScreen profile={profile} onSave={saveProfile} />;
     if (tab === "search")    return <SearchScreen members={members} />;
@@ -1282,13 +1375,39 @@ export default function App() {
     <>
       <style>{GLOBAL_CSS}</style>
       <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: C.bg, maxWidth: 480, margin: "0 auto", position: "relative" }}>
-        {/* App header */}
-        <div style={{ display: "flex", alignItems: "center", padding: "0 18px", height: 52, borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: C.bg, paddingTop: "env(safe-area-inset-top, 0px)" }}>
-          <div style={{ width: 30, height: 30, background: `linear-gradient(135deg,${C.accent},${C.purple})`, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Ic n="tree" size={16} color="#fff" />
-          </div>
-          <span style={{ fontFamily: "'Playfair Display',Georgia,serif", fontSize: 18, fontWeight: 900, color: C.text, marginLeft: 9 }}>My Life</span>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 7 }}>
+        {/* App header with back button */}
+        <div style={{ display: "flex", alignItems: "center", padding: "0 14px", height: 52, borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: C.bg, paddingTop: "env(safe-area-inset-top, 0px)", gap: 8 }}>
+          {/* Back button */}
+          {canGoBack && (
+            <button onClick={goBack} style={{
+              display: "flex", alignItems: "center", gap: 4,
+              background: C.surface, border: `1px solid ${C.border}`,
+              borderRadius: 9, padding: "5px 10px 5px 7px",
+              cursor: "pointer", color: C.muted, fontSize: 13,
+              fontFamily: "inherit", fontWeight: 600, flexShrink: 0,
+              transition: "background .15s",
+            }}>
+              <Ic n="back" size={15} color={C.accent} />
+              <span style={{ color: C.accent }}>Back</span>
+            </button>
+          )}
+
+          {/* Page title or logo */}
+          {canGoBack ? (
+            <span style={{ fontFamily: "'Playfair Display',Georgia,serif", fontSize: 16, fontWeight: 800, color: C.text, flex: 1, textAlign: "center", marginRight: 62 }}>
+              {TAB_TITLES[tab] || "My Life"}
+            </span>
+          ) : (
+            <>
+              <div style={{ width: 30, height: 30, background: `linear-gradient(135deg,${C.accent},${C.purple})`, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Ic n="tree" size={16} color="#fff" />
+              </div>
+              <span style={{ fontFamily: "'Playfair Display',Georgia,serif", fontSize: 18, fontWeight: 900, color: C.text, marginLeft: 1 }}>My Life</span>
+            </>
+          )}
+
+          {/* Sync indicator */}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
             <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
             <span style={{ fontSize: 11, color: C.muted }}>Synced</span>
           </div>
@@ -1300,7 +1419,7 @@ export default function App() {
         </div>
 
         {/* Bottom nav */}
-        <BottomNav active={tab} onNav={setTab} />
+        <BottomNav active={tab} onNav={navigate} />
       </div>
     </>
   );
