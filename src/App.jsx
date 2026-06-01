@@ -169,12 +169,14 @@ const SectionTitle = ({ children }) => (
 
 // ─── Default Data ──────────────────────────────────────────────────────────────
 const DEFAULT_MEMBERS = [
-  { id: 1, firstName: "Ramesh",  lastName: "Patel", relation: "Father",   gen: 0, x: 80,  y: 60,  dob: "1955-03-10", birthPlace: "Vadodara", notes: "Retired teacher",    color: GEN_COLORS[0] },
-  { id: 2, firstName: "Sunita",  lastName: "Patel", relation: "Mother",   gen: 0, x: 220, y: 60,  dob: "1958-07-22", birthPlace: "Surat",    notes: "Homemaker",         color: GEN_COLORS[0] },
-  { id: 3, firstName: "Arjun",   lastName: "Patel", relation: "Self",     gen: 1, x: 80,  y: 200, dob: "1985-06-12", birthPlace: "Ahmedabad",notes: "Software Engineer", color: GEN_COLORS[1] },
-  { id: 4, firstName: "Priya",   lastName: "Patel", relation: "Spouse",   gen: 1, x: 220, y: 200, dob: "1987-11-03", birthPlace: "Rajkot",   notes: "Doctor",            color: GEN_COLORS[1] },
-  { id: 5, firstName: "Vivaan",  lastName: "Patel", relation: "Son",      gen: 2, x: 80,  y: 340, dob: "2012-02-14", birthPlace: "Bengaluru",notes: "Student",           color: GEN_COLORS[2] },
-  { id: 6, firstName: "Anaya",   lastName: "Patel", relation: "Daughter", gen: 2, x: 220, y: 340, dob: "2015-09-08", birthPlace: "Bengaluru",notes: "Student",           color: GEN_COLORS[2] },
+  { id: 1, firstName: "Ramesh",  lastName: "Patel", relation: "Grandfather", gen: 0, x: 80,  y: 60,  dob: "1935-03-10", birthPlace: "Vadodara", notes: "Retired teacher",    color: GEN_COLORS[0] },
+  { id: 2, firstName: "Sunita",  lastName: "Patel", relation: "Grandmother", gen: 0, x: 220, y: 60,  dob: "1938-07-22", birthPlace: "Surat",    notes: "Homemaker",         color: GEN_COLORS[0] },
+  { id: 3, firstName: "Vijay",   lastName: "Patel", relation: "Father",      gen: 1, x: 80,  y: 200, dob: "1960-06-12", birthPlace: "Ahmedabad",notes: "Business Owner",   color: GEN_COLORS[1] },
+  { id: 4, firstName: "Meena",   lastName: "Patel", relation: "Mother",      gen: 1, x: 220, y: 200, dob: "1963-11-03", birthPlace: "Rajkot",   notes: "Teacher",           color: GEN_COLORS[1] },
+  { id: 5, firstName: "Arjun",   lastName: "Patel", relation: "Self",        gen: 2, x: 80,  y: 340, dob: "1985-06-12", birthPlace: "Bengaluru",notes: "Software Engineer", color: GEN_COLORS[2] },
+  { id: 6, firstName: "Priya",   lastName: "Patel", relation: "Spouse",      gen: 2, x: 220, y: 340, dob: "1987-11-03", birthPlace: "Rajkot",   notes: "Doctor",            color: GEN_COLORS[2] },
+  { id: 7, firstName: "Vivaan",  lastName: "Patel", relation: "Son",         gen: 3, x: 80,  y: 480, dob: "2012-02-14", birthPlace: "Bengaluru",notes: "Student",           color: GEN_COLORS[3] },
+  { id: 8, firstName: "Anaya",   lastName: "Patel", relation: "Daughter",    gen: 3, x: 220, y: 480, dob: "2015-09-08", birthPlace: "Bengaluru",notes: "Student",           color: GEN_COLORS[3] },
 ];
 
 const DEFAULT_CONNECTIONS = [
@@ -305,96 +307,226 @@ function AuthScreen({ onLogin }) {
   );
 }
 
-// ─── Screen: Dashboard ────────────────────────────────────────────────────────
+// ─── Screen: Dashboard (Cloud Storage Style) ─────────────────────────────────
+const DC = {
+  bg:        "#eef2f8",
+  sidebar:   "#1a2a4a",
+  sidebarTx: "#ffffff",
+  sidebarMuted: "rgba(255,255,255,0.55)",
+  sidebarActive: "rgba(255,255,255,0.13)",
+  card:      "#ffffff",
+  border:    "#dde4ef",
+  text:      "#1a2a4a",
+  muted:     "#7a8ba8",
+  accent:    "#4f8ef7",
+  purple:    "#c084fc",
+  pink:      "#f472b6",
+  teal:      "#2dd4bf",
+  gold:      "#fbbf24",
+  green:     "#34d399",
+};
+
+// Category color gradients matching the image
+const CAT_STYLES = [
+  { label: "Members",     icon: "user",     gradient: "linear-gradient(135deg,#c084fc,#818cf8)", count: null },
+  { label: "Documents",   icon: "note",     gradient: "linear-gradient(135deg,#38bdf8,#06b6d4)", count: null },
+  { label: "Birthdays",   icon: "birthday", gradient: "linear-gradient(135deg,#fb7185,#f43f5e)", count: null },
+  { label: "Notes",       icon: "edit",     gradient: "linear-gradient(135deg,#4f8ef7,#6366f1)", count: null },
+];
+
 function Dashboard({ profile, members, onNav }) {
-  const displayName = profile.firstName || "there";
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const displayName = profile.firstName || "User";
+  const [activeNav, setActiveNav] = useState("dashboard");
+
   const gens = [...new Set(members.map(m => m.gen))].length;
+  const membersWithBdays = members.filter(m => m.dob);
+  const membersWithNotes = members.filter(m => m.notes);
+
+  const catCounts = [members.length, gens, membersWithBdays.length, membersWithNotes.length];
+
+  // Upcoming birthdays as "recent files"
+  const today = new Date();
+  const recentMembers = [...members].slice(0, 5);
+
+  // Shared folders (generations)
+  const genGroups = [...new Set(members.map(m => m.gen))].sort().map(g => ({
+    gen: g,
+    members: members.filter(m => m.gen === g),
+  }));
+
+  const sideNavItems = [
+    { id: "dashboard", icon: "home",     label: "My cloud"      },
+    { id: "search",    icon: "search",   label: "Shared files"  },
+    { id: "tree",      icon: "tree",     label: "Favourites"    },
+    { id: "profile",   icon: "upload",   label: "Upload files"  },
+  ];
+
+  const navTo = (id) => { setActiveNav(id); onNav(id); };
+
+  // Avatar colours for "shared folder" member dots
+  const DOT_COLORS = ["#4f8ef7","#f472b6","#34d399","#fbbf24","#c084fc"];
 
   return (
-    <div style={{ padding: "24px 18px 24px" }}>
-      {/* Greeting */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 13, color: C.muted }}>{greeting},</div>
-        <div style={{ fontFamily: "'Playfair Display',Georgia,serif", fontSize: 26, fontWeight: 900, color: C.text, lineHeight: 1.15 }}>
-          {displayName} 👋
+    <div style={{ display: "flex", height: "100%", background: DC.bg, fontFamily: "'DM Sans', sans-serif" }}>
+
+      {/* ── Sidebar ── */}
+      <div style={{ width: 190, background: DC.sidebar, display: "flex", flexDirection: "column", padding: "20px 0 16px", flexShrink: 0 }}>
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 16px 20px" }}>
+          <div style={{ width: 32, height: 32, background: "linear-gradient(135deg,#4f8ef7,#c084fc)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Ic n="tree" size={16} color="#fff" />
+          </div>
+          <span style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 900, color: DC.sidebarTx }}>My Life</span>
+        </div>
+
+        {/* Nav items */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, padding: "0 10px" }}>
+          {sideNavItems.map(item => (
+            <button key={item.id} onClick={() => navTo(item.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "10px 10px",
+                borderRadius: 10, background: activeNav === item.id ? DC.sidebarActive : "transparent",
+                border: "none", cursor: "pointer", fontFamily: "inherit",
+                color: activeNav === item.id ? DC.sidebarTx : DC.sidebarMuted,
+                fontSize: 13, fontWeight: activeNav === item.id ? 600 : 400,
+                transition: "background .15s",
+              }}>
+              <Ic n={item.icon} size={17} color={activeNav === item.id ? DC.sidebarTx : DC.sidebarMuted} />
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Bottom nav */}
+        <div style={{ padding: "0 10px", display: "flex", flexDirection: "column", gap: 2 }}>
+          <button onClick={() => navTo("settings")}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 10px", borderRadius: 10, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", color: DC.sidebarMuted, fontSize: 13 }}>
+            <Ic n="settings" size={17} color={DC.sidebarMuted} /> Settings
+          </button>
+          <button onClick={() => navTo("profile")}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 10px", borderRadius: 10, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", color: DC.sidebarMuted, fontSize: 13 }}>
+            <Ic n="logout" size={17} color={DC.sidebarMuted} /> Log out
+          </button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
-        {[
-          { v: members.length, l: "Members",     color: C.accent  },
-          { v: gens,           l: "Generations", color: C.purple  },
-          { v: members.filter(m => m.dob).length, l: "Birthdays", color: C.gold  },
-          { v: members.filter(m => m.notes).length, l: "Notes",   color: C.green },
-        ].map(s => (
-          <Card key={s.l} style={{ padding: "14px 10px", textAlign: "center" }}>
-            <div style={{ fontFamily: "'Playfair Display',Georgia,serif", fontSize: 24, fontWeight: 900, color: s.color }}>{s.v}</div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{s.l}</div>
-          </Card>
-        ))}
+      {/* ── Main content ── */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 18px" }}>
+
+        {/* Search bar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: DC.card, border: `1px solid ${DC.border}`, borderRadius: 12, padding: "9px 14px", marginBottom: 22 }}>
+          <Ic n="search" size={16} color={DC.muted} />
+          <span style={{ fontSize: 13, color: DC.muted }}>Search members, notes, dates…</span>
+        </div>
+
+        {/* Categories */}
+        <div style={{ fontSize: 13, fontWeight: 700, color: DC.text, marginBottom: 12 }}>Categories</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 22 }}>
+          {CAT_STYLES.map((cat, i) => (
+            <div key={cat.label} style={{ background: cat.gradient, borderRadius: 14, padding: "14px 12px", cursor: "pointer", position: "relative" }}
+              onClick={() => navTo(["tree","search","tree","tree"][i])}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+                <div style={{ width: 30, height: 30, background: "rgba(255,255,255,0.25)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Ic n={cat.icon} size={15} color="#fff" />
+                </div>
+                {i === 0 && <span style={{ fontSize: 16 }}>⭐</span>}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{cat.label}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>{catCounts[i]} {i === 1 ? "generations" : "entries"}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Files / Generation Groups */}
+        <div style={{ fontSize: 13, fontWeight: 700, color: DC.text, marginBottom: 12 }}>Generations</div>
+        <div style={{ display: "flex", gap: 10, marginBottom: 22, overflowX: "auto", paddingBottom: 4 }}>
+          {genGroups.map(g => (
+            <div key={g.gen} onClick={() => navTo("tree")}
+              style={{ background: DC.card, border: `1px solid ${DC.border}`, borderRadius: 13, padding: "14px 14px", cursor: "pointer", flexShrink: 0, minWidth: 100 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: `${GEN_COLORS[g.gen % GEN_COLORS.length]}22`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+                <Ic n="tree" size={16} color={GEN_COLORS[g.gen % GEN_COLORS.length]} />
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: DC.text }}>Gen {g.gen + 1}</div>
+              <div style={{ fontSize: 10, color: DC.muted, marginTop: 2 }}>{g.members.length} members</div>
+            </div>
+          ))}
+          {/* Add new */}
+          <div onClick={() => navTo("tree")}
+            style={{ background: DC.card, border: `1.5px dashed ${DC.border}`, borderRadius: 13, padding: "14px 14px", cursor: "pointer", flexShrink: 0, minWidth: 72, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Ic n="plus" size={20} color={DC.muted} />
+          </div>
+        </div>
+
+        {/* Recent Members */}
+        <div style={{ fontSize: 13, fontWeight: 700, color: DC.text, marginBottom: 12 }}>Recent Members</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {recentMembers.map((m, i) => (
+            <div key={m.id} onClick={() => navTo("search")}
+              style={{ background: DC.card, border: `1px solid ${DC.border}`, borderRadius: 12, padding: "11px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: m.color + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Ic n="user" size={15} color={m.color} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: DC.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(m)}</div>
+                <div style={{ fontSize: 10, color: DC.muted }}>{m.relation} · {m.birthPlace || "—"}</div>
+              </div>
+              <div style={{ fontSize: 10, color: DC.muted, flexShrink: 0 }}>Gen {m.gen + 1}</div>
+              <Ic n="chevron" size={14} color={DC.muted} />
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Quick Actions */}
-      <SectionTitle>Quick Actions</SectionTitle>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 28 }}>
-        {[
-          { label: "Family Tree",    icon: "tree",     color: C.accent,  tab: "tree"     },
-          { label: "My Profile",     icon: "user",     color: C.purple,  tab: "profile"  },
-          { label: "Search Members", icon: "search",   color: C.gold,    tab: "search"   },
-          { label: "Settings",       icon: "settings", color: C.green,   tab: "settings" },
-        ].map(a => (
-          <Card key={a.label} onClick={() => onNav(a.tab)} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: a.color + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Ic n={a.icon} size={19} color={a.color} />
-            </div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{a.label}</span>
-          </Card>
-        ))}
-      </div>
+      {/* ── Right panel ── */}
+      <div style={{ width: 170, background: DC.card, borderLeft: `1px solid ${DC.border}`, padding: "20px 14px", flexShrink: 0, display: "flex", flexDirection: "column", gap: 18 }}>
 
-      {/* Upcoming Birthdays */}
-      {(() => {
-        const today = new Date();
-        const upcoming = members
-          .filter(m => m.dob)
-          .map(m => {
-            const d = new Date(m.dob);
-            const next = new Date(today.getFullYear(), d.getMonth(), d.getDate());
-            if (next < today) next.setFullYear(today.getFullYear() + 1);
-            const diff = Math.ceil((next - today) / 86400000);
-            return { ...m, diff };
-          })
-          .filter(m => m.diff <= 30)
-          .sort((a, b) => a.diff - b.diff);
-        if (!upcoming.length) return null;
-        return (
-          <>
-            <SectionTitle>Upcoming Birthdays 🎂</SectionTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-              {upcoming.map(m => (
-                <Card key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: m.color + "33", border: `2px solid ${m.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: m.color, fontSize: 14, flexShrink: 0 }}>
-                    {initials(m)}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{fullName(m)}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{m.diff === 0 ? "🎉 Today!" : `in ${m.diff} day${m.diff > 1 ? "s" : ""}`}</div>
-                  </div>
-                  <Badge label={m.relation} color={m.color} />
-                </Card>
-              ))}
-            </div>
-          </>
-        );
-      })()}
+        {/* Avatar */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#4f8ef7,#c084fc)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff" }}>
+            {(displayName[0] || "U").toUpperCase()}
+          </div>
+        </div>
 
-      {/* Sync badge */}
-      <div style={{ padding: "12px 14px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 8, height: 8, borderRadius: 4, background: C.green, boxShadow: `0 0 8px ${C.green}` }} />
-        <span style={{ fontSize: 12, color: C.muted }}>Firebase sync active · Data stored securely</span>
+        {/* Add new files button */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 8px", borderRadius: 14, border: `1.5px dashed ${DC.border}`, cursor: "pointer", gap: 8 }}
+          onClick={() => navTo("tree")}>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#e8f0fe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Ic n="upload" size={18} color={DC.accent} />
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: DC.text, textAlign: "center" }}>Add new member</div>
+        </div>
+
+        {/* Storage */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: DC.text }}>Your storage</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: DC.accent }}>{Math.round((members.length / 50) * 100)}% used</span>
+          </div>
+          <div style={{ height: 6, background: DC.border, borderRadius: 3, overflow: "hidden", marginBottom: 5 }}>
+            <div style={{ height: "100%", width: `${Math.min((members.length / 50) * 100, 100)}%`, background: DC.accent, borderRadius: 3 }} />
+          </div>
+          <div style={{ fontSize: 10, color: DC.muted }}>{members.length} of 50 members used</div>
+        </div>
+
+        {/* Shared generations */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: DC.text, marginBottom: 10 }}>Your generations</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {genGroups.slice(0, 3).map(g => (
+              <div key={g.gen} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", background: ["#f0f4ff","#fff0f8","#f0fff8"][g.gen % 3], borderRadius: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: DC.text }}>Gen {g.gen + 1}</span>
+                <div style={{ display: "flex" }}>
+                  {g.members.slice(0, 3).map((m, i) => (
+                    <div key={m.id} style={{ width: 18, height: 18, borderRadius: "50%", background: DOT_COLORS[i % DOT_COLORS.length], marginLeft: i === 0 ? 0 : -5, border: "2px solid #fff", fontSize: 7, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {initials(m)[0]}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <button onClick={() => navTo("tree")} style={{ fontSize: 11, color: DC.accent, background: "none", border: "none", cursor: "pointer", textAlign: "center", fontFamily: "inherit", padding: "4px 0" }}>+ Add more</button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -466,13 +598,148 @@ function ProfileScreen({ profile, onSave }) {
   );
 }
 
-// ─── Screen: Family Tree ──────────────────────────────────────────────────────
+// ─── Screen: Family Tree (Hierarchical Layout) ───────────────────────────────
+//
+// Layout rules (matching reference image):
+//   Row 0 (top)    : Grandparents  — faint/light color, small nodes
+//   Row 1          : Parents + Aunts/Uncles
+//   Row 2 (center) : Self (highlighted) + Spouse — prominent gold cards
+//   Row 3          : Brothers/Sisters
+//   Row 4          : Sons/Daughters
+//   Row 5 (bottom) : Grandchildren (if any)
+//
+// Couple connections draw a short horizontal bracket.
+// Parent→child lines drop from midpoint of couple bracket to child node top.
+
+const TREE_ROW = {
+  Grandfather: 0, Grandmother: 0,
+  Father: 1, Mother: 1, Uncle: 1, Aunt: 1,
+  Self: 2, Spouse: 2,
+  Brother: 3, Sister: 3, Cousin: 3,
+  Son: 4, Daughter: 4,
+  Other: 4,
+};
+const ROW_Y    = [60, 200, 340, 480, 620, 760];
+const NODE_W   = 110;
+const NODE_H   = 52;
+const COL_GAP  = 24;
+
+// Assign pixel positions based on relationship group, centering within each row
+function computeLayout(members) {
+  const rows = {};
+  members.forEach(m => {
+    const row = TREE_ROW[m.relation] ?? 4;
+    if (!rows[row]) rows[row] = [];
+    rows[row].push(m);
+  });
+
+  // Sort rows: Self first in row 2, couple pairs together
+  const COUPLE_ORDER = ["Grandfather","Grandmother","Father","Mother","Uncle","Aunt","Self","Spouse","Brother","Sister","Cousin","Son","Daughter","Other"];
+  Object.keys(rows).forEach(r => {
+    rows[r].sort((a, b) => COUPLE_ORDER.indexOf(a.relation) - COUPLE_ORDER.indexOf(b.relation));
+  });
+
+  const positions = {};
+  const CANVAS_W = 600; // virtual canvas, we'll center to screen
+
+  Object.entries(rows).forEach(([row, mems]) => {
+    const totalW = mems.length * NODE_W + (mems.length - 1) * COL_GAP;
+    const startX = (CANVAS_W - totalW) / 2;
+    mems.forEach((m, i) => {
+      positions[m.id] = {
+        x: startX + i * (NODE_W + COL_GAP),
+        y: ROW_Y[row] || (parseInt(row) * 140 + 60),
+        row: parseInt(row),
+      };
+    });
+  });
+
+  return positions;
+}
+
+// Draw connector lines between nodes
+function TreeConnectors({ members, positions }) {
+  const PINK  = "#f472b6";
+  const GRAY  = "#c8cfe0";
+  const lines = [];
+
+  // Couple brackets (horizontal line between couple nodes)
+  const coupleRelPairs = [
+    ["Grandfather","Grandmother"],
+    ["Father","Mother"],
+    ["Self","Spouse"],
+  ];
+  coupleRelPairs.forEach(([relA, relB]) => {
+    const a = members.find(m => m.relation === relA);
+    const b = members.find(m => m.relation === relB);
+    if (!a || !b || !positions[a.id] || !positions[b.id]) return;
+    const pa = positions[a.id], pb = positions[b.id];
+    const ax = pa.x + NODE_W / 2, ay = pa.y + NODE_H / 2;
+    const bx = pb.x + NODE_W / 2, by = pb.y + NODE_H / 2;
+    lines.push(<line key={`couple-${relA}`} x1={ax} y1={ay} x2={bx} y2={by} stroke={PINK} strokeWidth={2.5} strokeDasharray="5,3" />);
+  });
+
+  // Parent → child lines
+  // Grandparents → Father (midpoint of gp couple → top of Father)
+  const drawParentChild = (parentRelA, parentRelB, childRels, key) => {
+    const pA = members.find(m => m.relation === parentRelA);
+    const pB = members.find(m => m.relation === parentRelB);
+    const children = members.filter(m => childRels.includes(m.relation));
+    if (!children.length) return;
+
+    let originX, originY;
+    if (pA && pB && positions[pA.id] && positions[pB.id]) {
+      originX = (positions[pA.id].x + NODE_W / 2 + positions[pB.id].x + NODE_W / 2) / 2;
+      originY = positions[pA.id].y + NODE_H;
+    } else if (pA && positions[pA.id]) {
+      originX = positions[pA.id].x + NODE_W / 2;
+      originY = positions[pA.id].y + NODE_H;
+    } else if (pB && positions[pB.id]) {
+      originX = positions[pB.id].x + NODE_W / 2;
+      originY = positions[pB.id].y + NODE_H;
+    } else return;
+
+    if (children.length === 1) {
+      const c = children[0];
+      if (!positions[c.id]) return;
+      const cx = positions[c.id].x + NODE_W / 2;
+      const cy = positions[c.id].y;
+      const midY = (originY + cy) / 2;
+      lines.push(
+        <path key={`pc-${key}-${c.id}`}
+          d={`M${originX},${originY} L${originX},${midY} L${cx},${midY} L${cx},${cy}`}
+          fill="none" stroke={PINK} strokeWidth={2} />
+      );
+    } else {
+      // horizontal bus line, then verticals to each child
+      const firstC = children[0], lastC = children[children.length - 1];
+      if (!positions[firstC.id] || !positions[lastC.id]) return;
+      const childrenY = positions[firstC.id].y;
+      const midY = (originY + childrenY) / 2;
+      const busX1 = positions[firstC.id].x + NODE_W / 2;
+      const busX2 = positions[lastC.id].x + NODE_W / 2;
+
+      lines.push(<line key={`bus-down-${key}`} x1={originX} y1={originY} x2={originX} y2={midY} stroke={PINK} strokeWidth={2} />);
+      lines.push(<line key={`bus-h-${key}`} x1={busX1} y1={midY} x2={busX2} y2={midY} stroke={PINK} strokeWidth={2} />);
+      children.forEach(c => {
+        if (!positions[c.id]) return;
+        const cx = positions[c.id].x + NODE_W / 2;
+        lines.push(<line key={`pc-${key}-${c.id}`} x1={cx} y1={midY} x2={cx} y2={positions[c.id].y} stroke={PINK} strokeWidth={2} />);
+      });
+    }
+  };
+
+  drawParentChild("Grandfather","Grandmother", ["Father","Mother","Uncle","Aunt"], "gp");
+  drawParentChild("Father","Mother", ["Self","Brother","Sister"], "parents");
+  drawParentChild("Uncle","Aunt",   ["Cousin"], "uncle");
+  drawParentChild("Self","Spouse",  ["Son","Daughter"], "self");
+
+  return <>{lines}</>;
+}
+
 function FamilyTreeScreen({ members, setMembers, connections, setConnections }) {
-  const [selected,   setSelected]   = useState(null);
-  const [dragging,   setDragging]   = useState(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [zoom,       setZoom]       = useState(1);
-  const [panOffset,  setPanOffset]  = useState({ x: 0, y: 0 });
+  const [zoom,       setZoom]       = useState(0.85);
+  const [panOffset,  setPanOffset]  = useState({ x: 0, y: 40 });
   const [isPanning,  setIsPanning]  = useState(false);
   const [panStart,   setPanStart]   = useState({ x: 0, y: 0 });
   const [showAdd,    setShowAdd]    = useState(false);
@@ -483,71 +750,59 @@ function FamilyTreeScreen({ members, setMembers, connections, setConnections }) 
 
   const doToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2000); };
 
-  // ── Drag node ──
-  const onNodeMouseDown = (e, id) => {
-    e.preventDefault(); e.stopPropagation();
-    const rect = svgRef.current.getBoundingClientRect();
-    const m = members.find(m => m.id === id);
-    setDragging(id); setSelected(id);
-    setDragOffset({
-      x: (e.clientX - rect.left - panOffset.x) / zoom - m.x,
-      y: (e.clientY - rect.top  - panOffset.y) / zoom - m.y,
-    });
-  };
+  const positions = computeLayout(members);
 
   // ── Pan canvas ──
   const onSvgMouseDown = (e) => {
-    if (dragging) return;
+    if (e.target.closest && e.target.closest("[data-node]")) return;
     setIsPanning(true);
     setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
   };
-
   const onMouseMove = useCallback((e) => {
-    if (dragging) {
-      const rect = svgRef.current.getBoundingClientRect();
-      const nx = (e.clientX - rect.left - panOffset.x) / zoom - dragOffset.x;
-      const ny = (e.clientY - rect.top  - panOffset.y) / zoom - dragOffset.y;
-      setMembers(ms => ms.map(m => m.id === dragging ? { ...m, x: Math.max(10, nx), y: Math.max(10, ny) } : m));
-    } else if (isPanning) {
-      setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+    if (isPanning) setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+  }, [isPanning, panStart]);
+  const onMouseUp = () => setIsPanning(false);
+
+  // Touch pan
+  const touchPanStart = useRef(null);
+  const onTouchStartSvg = (e) => {
+    if (e.touches.length === 1) {
+      touchPanStart.current = { x: e.touches[0].clientX - panOffset.x, y: e.touches[0].clientY - panOffset.y };
     }
-  }, [dragging, isPanning, dragOffset, panStart, panOffset, zoom]);
-
-  const onMouseUp = () => { setDragging(null); setIsPanning(false); };
-
-  // Touch support
-  const onTouchStart = (e, id) => {
-    const t = e.touches[0];
-    const rect = svgRef.current.getBoundingClientRect();
-    const m = members.find(m => m.id === id);
-    setDragging(id); setSelected(id);
-    setDragOffset({
-      x: (t.clientX - rect.left - panOffset.x) / zoom - m.x,
-      y: (t.clientY - rect.top  - panOffset.y) / zoom - m.y,
-    });
   };
-  const onTouchMove = (e) => {
-    if (!dragging) return;
-    const t = e.touches[0];
-    const rect = svgRef.current.getBoundingClientRect();
-    const nx = (t.clientX - rect.left - panOffset.x) / zoom - dragOffset.x;
-    const ny = (t.clientY - rect.top  - panOffset.y) / zoom - dragOffset.y;
-    setMembers(ms => ms.map(m => m.id === dragging ? { ...m, x: Math.max(10, nx), y: Math.max(10, ny) } : m));
+  const onTouchMoveSvg = (e) => {
+    if (e.touches.length === 1 && touchPanStart.current) {
+      setPanOffset({ x: e.touches[0].clientX - touchPanStart.current.x, y: e.touches[0].clientY - touchPanStart.current.y });
+    }
+  };
+
+  // ── Node style by relation ──
+  const nodeStyle = (m) => {
+    const isSelf   = m.relation === "Self";
+    const isSpouse = m.relation === "Spouse";
+    const isGP     = m.relation === "Grandfather" || m.relation === "Grandmother";
+    const isParent = m.relation === "Father" || m.relation === "Mother";
+
+    if (isSelf)   return { fill: "#fbbf24", stroke: "#f59e0b", strokeW: 3, textColor: "#1a2a4a", subColor: "#92400e", labelSize: 11, nameSize: 13 };
+    if (isSpouse) return { fill: "#fde68a", stroke: "#fbbf24", strokeW: 2, textColor: "#1a2a4a", subColor: "#78350f", labelSize: 10, nameSize: 11 };
+    if (isGP)     return { fill: "#fef9ee", stroke: "#fde68a", strokeW: 1.5, textColor: "#6b7280", subColor: "#9ca3af", labelSize: 9,  nameSize: 10 };
+    if (isParent) return { fill: "#fffbeb", stroke: "#fcd34d", strokeW: 1.5, textColor: "#374151", subColor: "#6b7280", labelSize: 9,  nameSize: 11 };
+    // siblings, children etc.
+    return { fill: "#fef3c7", stroke: "#fbbf24", strokeW: 1.5, textColor: "#1a2a4a", subColor: "#6b7280", labelSize: 9, nameSize: 11 };
   };
 
   // ── Add member ──
   const AddModal = () => {
     const [form, setForm] = useState({ firstName: "", lastName: "", relation: "Son", dob: "", birthPlace: "", notes: "" });
     const f = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
-    const genForRelation = r => ["Father","Mother","Grandfather","Grandmother"].includes(r) ? 0 : ["Self","Spouse","Brother","Sister","Uncle","Aunt","Cousin"].includes(r) ? 1 : 2;
     const add = () => {
       if (!form.firstName) return;
-      const gen = genForRelation(form.relation);
+      const row = TREE_ROW[form.relation] ?? 4;
       setMembers(ms => [...ms, {
-        id: Date.now(), ...form, gen,
-        x: 80 + Math.random() * 260,
-        y: 60 + gen * 150,
-        color: GEN_COLORS[gen] || GEN_COLORS[5],
+        id: Date.now(), ...form,
+        gen: row,
+        x: 80 + Math.random() * 200, y: ROW_Y[row] || 400,
+        color: GEN_COLORS[row % GEN_COLORS.length],
       }]);
       setShowAdd(false); doToast("Member added");
     };
@@ -622,98 +877,115 @@ function FamilyTreeScreen({ members, setMembers, connections, setConnections }) 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Toolbar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: C.bg }}>
         <div style={{ fontFamily: "'Playfair Display',Georgia,serif", fontSize: 16, fontWeight: 800, color: C.text, flex: 1 }}>Family Tree</div>
-        <button onClick={() => setZoom(z => Math.min(2.5, +(z + 0.2).toFixed(1)))} style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.text, fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+        <button onClick={() => setZoom(z => Math.min(2, +(z + 0.15).toFixed(2)))} style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.text, fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
         <span style={{ fontSize: 11, color: C.dim, minWidth: 36, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))} style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.text, fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-        <button onClick={() => { setZoom(1); setPanOffset({ x: 0, y: 0 }); }} style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.muted, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>⌂</button>
+        <button onClick={() => setZoom(z => Math.max(0.3, +(z - 0.15).toFixed(2)))} style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.text, fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+        <button onClick={() => { setZoom(0.85); setPanOffset({ x: 0, y: 40 }); }} style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", color: C.muted, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>⌂</button>
         <Btn label="Add" icon="plus" small onClick={() => setShowAdd(true)} />
       </div>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: 14, padding: "7px 14px", borderBottom: `1px solid ${C.border}`, overflowX: "auto", flexShrink: 0 }}>
-        {[["Grandparents",0],["Parents",1],["Self/Spouse",2],["Children",3]].map(([l,i]) => (
-          <div key={l} style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-            <div style={{ width: 9, height: 9, borderRadius: 3, background: GEN_COLORS[i] }} />
-            <span style={{ fontSize: 10, color: C.muted }}>{l}</span>
+      <div style={{ display: "flex", gap: 14, padding: "6px 14px", borderBottom: `1px solid ${C.border}`, overflowX: "auto", flexShrink: 0, background: C.bg }}>
+        {[
+          { label: "Grandparents", fill: "#fef9ee", stroke: "#fde68a" },
+          { label: "Parents",      fill: "#fffbeb", stroke: "#fcd34d" },
+          { label: "Self / Spouse",fill: "#fbbf24", stroke: "#f59e0b" },
+          { label: "Children",     fill: "#fef3c7", stroke: "#fbbf24" },
+        ].map(l => (
+          <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+            <div style={{ width: 16, height: 10, borderRadius: 3, background: l.fill, border: `1.5px solid ${l.stroke}` }} />
+            <span style={{ fontSize: 10, color: C.muted }}>{l.label}</span>
           </div>
         ))}
-        <div style={{ marginLeft: "auto", fontSize: 10, color: C.dim, flexShrink: 0 }}>Drag nodes · Pinch to zoom</div>
+        <div style={{ marginLeft: "auto", fontSize: 10, color: C.dim, flexShrink: 0 }}>Drag to pan</div>
       </div>
 
-      {/* SVG canvas */}
-      <div style={{ flex: 1, overflow: "hidden", position: "relative", background: C.bg }}>
+      {/* SVG Canvas */}
+      <div style={{ flex: 1, overflow: "hidden", position: "relative", background: "#f7f9fc" }}>
         <svg
           ref={svgRef} width="100%" height="100%"
-          style={{ cursor: isPanning ? "grabbing" : dragging ? "grabbing" : "grab", touchAction: "none" }}
+          style={{ cursor: isPanning ? "grabbing" : "grab", touchAction: "none", userSelect: "none" }}
           onMouseDown={onSvgMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onMouseUp}
+          onTouchStart={onTouchStartSvg}
+          onTouchMove={onTouchMoveSvg}
+          onTouchEnd={() => { touchPanStart.current = null; }}
         >
-          <g transform={`translate(${panOffset.x},${panOffset.y}) scale(${zoom})`}>
-            {/* Grid dots */}
-            <defs>
-              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <circle cx="20" cy="20" r="1" fill={C.dim} opacity="0.3" />
-              </pattern>
-            </defs>
-            <rect x="-2000" y="-2000" width="6000" height="6000" fill="url(#grid)" />
+          <defs>
+            <pattern id="dots" width="30" height="30" patternUnits="userSpaceOnUse">
+              <circle cx="15" cy="15" r="1.2" fill="#c8cfe0" opacity="0.5" />
+            </pattern>
+            {members.map(m => (
+              <clipPath key={m.id} id={`clip-${m.id}`}>
+                <rect x={0} y={0} width={NODE_W} height={NODE_H} rx={10} />
+              </clipPath>
+            ))}
+          </defs>
 
-            {/* Connections */}
-            {connections.map((conn, i) => {
-              const a = members.find(m => m.id === conn.from);
-              const b = members.find(m => m.id === conn.to);
-              if (!a || !b) return null;
-              const isCpl = conn.type === "couple";
-              const ax = a.x + 44, ay = a.y + 36;
-              const bx = b.x + 44, by = b.y + 36;
-              const mx = (ax + bx) / 2, my = (ay + by) / 2;
-              return (
-                <g key={i}>
-                  <path
-                    d={`M${ax},${ay} Q${mx},${isCpl ? my : (ay + by) / 2} ${bx},${by}`}
-                    fill="none"
-                    stroke={isCpl ? C.rose : C.dim}
-                    strokeWidth={isCpl ? 2 : 1.5}
-                    strokeDasharray={isCpl ? "6,4" : "none"}
-                    strokeOpacity={0.7}
-                  />
-                </g>
-              );
-            })}
+          {/* Dotted background */}
+          <rect x="-5000" y="-5000" width="12000" height="12000" fill="url(#dots)" />
+
+          <g transform={`translate(${panOffset.x},${panOffset.y}) scale(${zoom})`}>
+
+            {/* Connector lines */}
+            <TreeConnectors members={members} positions={positions} />
 
             {/* Member nodes */}
             {members.map(m => {
-              const isSelected = selected === m.id;
+              const pos = positions[m.id];
+              if (!pos) return null;
+              const s = nodeStyle(m);
+              const isSelf = m.relation === "Self";
+              const name = fullName(m);
+              const shortName = name.length > 14 ? name.slice(0, 13) + "…" : name;
+
               return (
                 <g key={m.id}
-                  transform={`translate(${m.x},${m.y})`}
-                  onMouseDown={e => onNodeMouseDown(e, m.id)}
-                  onTouchStart={e => onTouchStart(e, m.id)}
-                  onClick={() => { if (!dragging) setShowDetail(m.id); }}
-                  style={{ cursor: "grab" }}
+                  transform={`translate(${pos.x},${pos.y})`}
+                  data-node="1"
+                  onClick={() => setShowDetail(m.id)}
+                  style={{ cursor: "pointer" }}
                 >
-                  {isSelected && <rect x={-4} y={-4} width={96} height={80} rx={16} fill={m.color} opacity={0.12} />}
-                  <rect x={0} y={0} width={88} height={72} rx={13}
-                    fill={isSelected ? m.color + "28" : C.surface}
-                    stroke={isSelected ? m.color : C.border}
-                    strokeWidth={isSelected ? 2 : 1}
+                  {/* Shadow for Self */}
+                  {isSelf && <rect x={3} y={4} width={NODE_W} height={NODE_H} rx={10} fill="#f59e0b" opacity={0.25} />}
+
+                  {/* Card rect */}
+                  <rect x={0} y={0} width={NODE_W} height={NODE_H} rx={10}
+                    fill={s.fill} stroke={s.stroke} strokeWidth={s.strokeW}
                   />
-                  <circle cx={44} cy={27} r={18}
-                    fill={m.color + "28"} stroke={m.color} strokeWidth={2}
-                  />
-                  {m.photo
-                    ? <image href={m.photo} x={26} y={9} width={36} height={36} clipPath={`url(#clip-${m.id})`} />
-                    : <text x={44} y={33} textAnchor="middle" fill={m.color} fontSize={12} fontWeight={800}>{initials(m)}</text>
-                  }
-                  <text x={44} y={57} textAnchor="middle" fill={C.text} fontSize={9} fontWeight={600}>
-                    {fullName(m).length > 12 ? fullName(m).slice(0, 11) + "…" : fullName(m)}
+
+                  {/* Name */}
+                  <text x={NODE_W / 2} y={isSelf ? 22 : 20}
+                    textAnchor="middle"
+                    fill={s.textColor}
+                    fontSize={s.nameSize}
+                    fontWeight={isSelf ? 900 : 700}
+                    fontFamily="'DM Sans', sans-serif"
+                    letterSpacing={isSelf ? "0.04em" : "0"}
+                  >
+                    {shortName.toUpperCase()}
                   </text>
-                  <text x={44} y={68} textAnchor="middle" fill={C.dim} fontSize={8}>{m.relation}</text>
+
+                  {/* Relation label */}
+                  <text x={NODE_W / 2} y={isSelf ? 38 : 35}
+                    textAnchor="middle"
+                    fill={s.subColor}
+                    fontSize={s.labelSize}
+                    fontFamily="'DM Sans', sans-serif"
+                  >
+                    {m.relation}
+                  </text>
+
+                  {/* DOB if Self */}
+                  {isSelf && m.dob && (
+                    <text x={NODE_W / 2} y={48} textAnchor="middle" fill="#92400e" fontSize={8} fontFamily="'DM Sans',sans-serif">
+                      {m.dob}
+                    </text>
+                  )}
                 </g>
               );
             })}
@@ -725,14 +997,14 @@ function FamilyTreeScreen({ members, setMembers, connections, setConnections }) 
       {detail && (
         <Modal onClose={() => setShowDetail(null)}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
-            <div style={{ width: 56, height: 56, borderRadius: "50%", background: detail.color + "33", border: `2px solid ${detail.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 900, color: detail.color, flexShrink: 0 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 12, background: "#fef3c7", border: "2px solid #fbbf24", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#92400e", flexShrink: 0 }}>
               {detail.photo
-                ? <img src={detail.photo} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                ? <img src={detail.photo} alt="" style={{ width: "100%", height: "100%", borderRadius: 10, objectFit: "cover" }} />
                 : initials(detail)}
             </div>
             <div>
               <div style={{ fontWeight: 700, color: C.text, fontSize: 17 }}>{fullName(detail)}</div>
-              <Badge label={detail.relation} color={detail.color} />
+              <Badge label={detail.relation} color="#f59e0b" />
             </div>
             <button onClick={() => setShowDetail(null)} style={{ marginLeft: "auto", background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 22, lineHeight: 1 }}>×</button>
           </div>
@@ -994,6 +1266,18 @@ export default function App() {
     if (tab === "settings")  return <SettingsScreen onLogout={handleLogout} members={members} profile={profile} />;
   };
 
+  // Dashboard gets a full-width, no-chrome layout
+  if (tab === "dashboard") return (
+    <>
+      <style>{GLOBAL_CSS}</style>
+      <div style={{ height: "100dvh", background: DC.bg, maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
+          {renderTab()}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <>
       <style>{GLOBAL_CSS}</style>
@@ -1026,7 +1310,7 @@ export default function App() {
 const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body, #root { height: 100%; background: #0d1117; }
+  html, body, #root { height: 100%; background: #eef2f8; }
   body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; }
   input, textarea, button { font-family: inherit; }
   input::placeholder, textarea::placeholder { color: #3f4f68; }
