@@ -1,0 +1,25 @@
+import { useState } from "react";
+import MySelfLogin from "./MySelfLogin";
+import MySelfFrontPage from "./MySelfFrontPage";
+
+export default function App() {
+  // isLoggedIn tracks auth state. loggedInUser carries the user info from login.
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState(null);
+
+  function handleLoginSuccess(userInfo) {
+    setLoggedInUser(userInfo);
+    setIsLoggedIn(true);
+  }
+
+  function handleLogout() {
+    setIsLoggedIn(false);
+    setLoggedInUser(null);
+  }
+
+  if (!isLoggedIn) {
+    return <MySelfLogin onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  return <MySelfFrontPage onLogout={handleLogout} loggedInUser={loggedInUser} />;
+}
