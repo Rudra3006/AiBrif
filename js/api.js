@@ -10,11 +10,17 @@ const AiBirfAPI = (function () {
     const url = `${APP_CONFIG.PROXY_URL}?symbol=${encodeURIComponent(yahooSymbol)}&range=${range}&interval=${interval}`;
     try {
       const res = await fetch(url, { cache: "no-store" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data || data.error) {
-        const msg = (data && data.error) ? data.error : `Proxy returned HTTP ${res.status}`;
-        throw new Error(msg);
+      const rawText = await res.text();
+      let data = null;
+      try { data = JSON.parse(rawText); } catch { /* not valid JSON — handled below */ }
+
+      if (!res.ok || !data) {
+        const snippet = rawText ? rawText.replace(/\s+/g, " ").trim().slice(0, 140) : "(empty response)";
+        throw new Error(!data
+          ? `Server returned non-JSON (HTTP ${res.status}): ${snippet}`
+          : `Proxy returned HTTP ${res.status}`);
       }
+      if (data.error) throw new Error(data.error);
       return data;
     } catch (err) {
       lastError = err.message || String(err);

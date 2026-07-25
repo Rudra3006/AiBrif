@@ -25,8 +25,24 @@
  * provider (e.g. Twelve Data) by editing fetchYahoo() below.
  */
 
+// Some hosts have display_errors on, which prints PHP warnings/notices
+// straight into the response body and corrupts the JSON (this is the
+// #1 cause of "request succeeds with HTTP 200 but body isn't valid JSON").
+// Buffer everything and only ever flush our own clean JSON via respond().
+error_reporting(0);
+ini_set('display_errors', '0');
+ob_start();
+
 header("Content-Type: application/json; charset=utf-8");
 header("Access-Control-Allow-Origin: *");
+
+/** Discards any stray output captured in the buffer, then sends clean JSON. */
+function respond($payload, $httpCode = 200, $jsonFlags = 0) {
+    if (ob_get_length() !== false) { ob_clean(); }
+    http_response_code($httpCode);
+    echo json_encode($payload, $jsonFlags);
+    exit;
+}
 
 $cacheDir = __DIR__ . '/_cache';
 if (!is_dir($cacheDir)) { @mkdir($cacheDir, 0755, true); }
@@ -41,19 +57,20 @@ if (isset($_GET['health'])) {
 
     $checks['curl_extension_loaded'] = function_exists('curl_init');
     $checks['cache_dir_writable']    = is_writable($cacheDir);
+    $checks['display_errors_off']    = (ini_get('display_errors') == '0' || ini_get('display_errors') === '');
 
     $crumbInfo = getCrumb($cacheDir, true /* forceReport */);
     $checks['cookie_crumb_obtained'] = $crumbInfo['ok'];
     $checks['cookie_crumb_detail']   = $crumbInfo['detail'];
 
+    $debug = null;
     $testSymbol = 'RELIANCE.NS';
     $test = fetchYahoo($testSymbol, '5d', '1d', $cacheDir, $debug);
     $checks['test_symbol'] = $testSymbol;
     $checks['test_fetch_ok'] = ($test !== null);
     $checks['test_fetch_debug'] = $debug;
 
-    echo json_encode(["health_check" => $checks, "generated_at" => date('c')], JSON_PRETTY_PRINT);
-    exit;
+    respond(["health_check" => $checks, "generated_at" => date('c')], 200, JSON_PRETTY_PRINT);
 }
 
 $symbol   = isset($_GET['symbol'])   ? preg_replace('/[^A-Za-z0-9\.\^=\-]/', '', $_GET['symbol']) : '';
@@ -61,9 +78,7 @@ $range    = isset($_GET['range'])    ? preg_replace('/[^a-z0-9]/', '', $_GET['ra
 $interval = isset($_GET['interval']) ? preg_replace('/[^a-z0-9]/', '', $_GET['interval']) : '1d';
 
 if (!$symbol) {
-    http_response_code(400);
-    echo json_encode(["error" => "Missing symbol parameter"]);
-    exit;
+    respond(["error" => "Missing symbol parameter"], 400);
 }
 
 // ---- Tiny file-based cache (60 seconds) to be gentle on Yahoo & speed up repeat loads ----
@@ -72,8 +87,8 @@ $cacheFile = $cacheDir . '/' . $cacheKey . '.json';
 $cacheTtl  = 60; // seconds
 
 if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < $cacheTtl)) {
-    echo file_get_contents($cacheFile);
-    exit;
+    $cached = json_decode(file_get_contents($cacheFile), true);
+    if ($cached !== null) { respond($cached); }
 }
 
 $debug = null;
@@ -82,20 +97,18 @@ $result = fetchYahoo($symbol, $range, $interval, $cacheDir, $debug);
 if ($result === null) {
     // Serve stale cache rather than nothing, if we have it.
     if (file_exists($cacheFile)) {
-        echo file_get_contents($cacheFile);
-        exit;
+        $stale = json_decode(file_get_contents($cacheFile), true);
+        if ($stale !== null) { respond($stale); }
     }
-    http_response_code(502);
-    echo json_encode([
+    respond([
         "error" => "Upstream data source unavailable for $symbol",
         "debug" => $debug, // safe to expose: no secrets, just HTTP status/reason
         "hint"  => "Open api/proxy.php?health=1 in your browser to diagnose."
-    ]);
-    exit;
+    ], 502);
 }
 
 file_put_contents($cacheFile, json_encode($result));
-echo json_encode($result);
+respond($result);
 
 
 /**
