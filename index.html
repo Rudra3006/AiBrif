@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AiBirf Market Pulse — Indian Stocks, Commodities &amp; Forecasts</title>
+<meta name="description" content="Live NSE/BSE stock tracker, commodity prices, technical analysis and 4-week trend projections.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ============ BRAND / PULSE BAR ============ -->
+<header class="pulse-bar">
+  <div class="pulse-bar__brand">
+    <span class="bell-dot" id="bellDot" aria-hidden="true"></span>
+    <span class="brand-name">AiBirf</span>
+    <span class="brand-tag">Market Pulse</span>
+  </div>
+
+  <div class="pulse-bar__ticker" id="indexTicker">
+    <div class="ticker-track" id="tickerTrack">
+      <span class="ticker-item">Loading indices…</span>
+    </div>
+  </div>
+
+  <div class="pulse-bar__sync">
+    <span id="syncStatus">Syncing…</span>
+    <span class="sync-dot" id="syncDot"></span>
+    <span id="nextSync"></span>
+  </div>
+</header>
+
+<div class="data-banner hidden" id="dataBanner">
+  <span id="dataBannerText">—</span>
+  <button id="dataBannerRetry" class="btn-ghost btn-sm">Retry now</button>
+</div>
+
+<div class="app-shell">
+
+  <!-- ============ SIDEBAR: WATCHLIST ============ -->
+  <aside class="sidebar">
+    <div class="sidebar__head">
+      <h2>Watchlist</h2>
+      <button id="addSymbolBtn" class="btn-brass btn-sm" title="Add symbol">+ Add</button>
+    </div>
+
+    <div id="addSymbolForm" class="add-form hidden">
+      <input id="newSymbolInput" type="text" placeholder="e.g. RELIANCE, TCS, INFY" autocomplete="off">
+      <div class="add-form__exchange">
+        <label><input type="radio" name="exch" value="NS" checked> NSE</label>
+        <label><input type="radio" name="exch" value="BO"> BSE</label>
+      </div>
+      <div class="add-form__actions">
+        <button id="confirmAddBtn" class="btn-brass btn-sm">Add to watchlist</button>
+        <button id="cancelAddBtn" class="btn-ghost btn-sm">Cancel</button>
+      </div>
+    </div>
+
+    <ul class="watchlist" id="watchlistUl">
+      <!-- populated by JS -->
+    </ul>
+
+    <div class="sidebar__foot">
+      <p class="disclaimer-mini">Educational analysis only — not investment advice.</p>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN CONTENT ============ -->
+  <main class="main">
+
+    <section class="section-head">
+      <h1>Your Stocks</h1>
+      <p class="muted">Auto-refreshes every 10 minutes · Tap a card for the full technical breakdown</p>
+    </section>
+
+    <section class="stock-grid" id="stockGrid">
+      <!-- stock cards injected by JS -->
+      <div class="empty-state" id="emptyState">
+        <p>Your watchlist is empty. Add a stock from the sidebar to get started — try <strong>RELIANCE</strong>, <strong>TCS</strong> or <strong>HDFCBANK</strong>.</p>
+      </div>
+    </section>
+
+    <section class="section-head section-head--commodities">
+      <h1>Commodities</h1>
+      <p class="muted">Gold, silver &amp; crude oil, global benchmark prices in USD</p>
+    </section>
+
+    <section class="commodity-strip" id="commodityStrip">
+      <!-- commodity cards injected by JS -->
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ DETAIL DRAWER ============ -->
+<div class="drawer-overlay" id="drawerOverlay"></div>
+<aside class="drawer" id="detailDrawer">
+  <div class="drawer__head">
+    <div>
+      <h2 id="drawerSymbol">—</h2>
+      <p class="muted" id="drawerName">—</p>
+    </div>
+    <button class="btn-ghost btn-sm" id="closeDrawerBtn">Close ✕</button>
+  </div>
+
+  <div class="drawer__price">
+    <span class="drawer__price-val" id="drawerPrice">—</span>
+    <span class="drawer__price-chg" id="drawerChange">—</span>
+  </div>
+
+  <div class="drawer__chart-wrap">
+    <canvas id="priceChart" height="220"></canvas>
+  </div>
+
+  <div class="signal-banner" id="signalBanner">
+    <span class="signal-banner__label">Overall bias</span>
+    <span class="signal-banner__value" id="signalValue">—</span>
+  </div>
+
+  <h3 class="drawer__subhead">Technical Breakdown</h3>
+  <div class="indicator-grid" id="indicatorGrid">
+    <!-- indicator cards injected by JS -->
+  </div>
+
+  <h3 class="drawer__subhead">4-Week Trend Projection</h3>
+  <p class="muted small" id="forecastMeta">—</p>
+  <div class="drawer__chart-wrap">
+    <canvas id="forecastChart" height="200"></canvas>
+  </div>
+  <p class="disclaimer-box">
+    This projection extrapolates recent price trend and volatility. It is a statistical estimate,
+    not a prediction of actual future price — markets can move sharply against any trend for reasons
+    a chart cannot capture. Nothing here is financial advice.
+  </p>
+
+  <div class="drawer__remove">
+    <button class="btn-danger btn-sm" id="removeSymbolBtn">Remove from watchlist</button>
+  </div>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/indicators.js"></script>
+<script src="js/forecast.js"></script>
+<script src="js/watchlist.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
