@@ -48,6 +48,18 @@ format without warning. If you later want a contractually-supported feed,
 swap the `fetchYahoo()` function in `api/proxy.php` for a paid provider
 (Twelve Data's "Grow" plan is the most straightforward one that covers NSE).
 
+**Why prices might not load (fixed in this version):** Yahoo now requires a
+session cookie + "crumb" token on most chart requests coming from server/
+datacenter IPs — without it, shared hosts get silently blocked and nothing
+ever loads. `api/proxy.php` now fetches and caches that cookie/crumb pair
+automatically and retries once if Yahoo invalidates it, falling back to a
+plain request if your host's IP doesn't need one. If data still won't load,
+open `https://AiBirf.com/api/proxy.php?health=1` directly in your browser —
+it reports exactly which step is failing (cURL missing, cache folder not
+writable, outbound HTTPS blocked, Yahoo blocking the request, etc.) so you
+can tell your host precisely what to fix. The dashboard itself will also
+show a banner on the page describing the problem instead of loading forever.
+
 ## 3. Uploading to AiBirf.com
 
 1. Confirm your hosting plan supports **PHP** (it almost certainly does).
@@ -55,14 +67,18 @@ swap the `fetchYahoo()` function in `api/proxy.php` for a paid provider
    web root (often `public_html/`) via FTP, or your host's File Manager.
 3. Visit `https://AiBirf.com/` — the dashboard should load with the
    default watchlist (Reliance, TCS, HDFC Bank, Infosys).
-4. If prices don't load, open your browser's console (F12) — it will show
-   whether `api/proxy.php` is reachable and what error Yahoo returned.
-   Common fixes:
+4. If prices don't load, first visit `https://AiBirf.com/api/proxy.php?health=1`
+   directly — it runs a self-test and tells you exactly what's wrong
+   (cURL missing, `_cache` folder not writable, outbound HTTPS blocked,
+   Yahoo blocking the request, etc.). Then check your browser's console
+   (F12) on the main page for the same detail. Common fixes:
    - Make sure `api/proxy.php` uploaded correctly and PHP is enabled.
    - Make sure the `api/_cache` folder can be created (PHP needs write
      permission in that directory — most hosts allow this by default).
    - Some hosts block outbound cURL by default; if so, contact your host
-     to allow outbound HTTPS requests from PHP.
+     to allow outbound HTTPS requests from PHP (needed for both the Yahoo
+     chart calls and the cookie/crumb calls to `fc.yahoo.com` and
+     `query2.finance.yahoo.com`).
 
 No build step, no npm install, no database — it's plain HTML/CSS/JS plus
 one PHP file.

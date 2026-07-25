@@ -80,6 +80,20 @@ button{font-family:var(--font-body); cursor:pointer;}
 .sync-dot{width:7px; height:7px; border-radius:50%; background:var(--up);}
 .sync-dot.stale{background:var(--brass);}
 
+/* ---------- Data error banner ---------- */
+.data-banner{
+  display:flex; align-items:center; justify-content:center; gap:16px;
+  padding:10px 20px; background:var(--down-dim); color:var(--down);
+  border-bottom:1px solid var(--hairline); font-family:var(--font-mono);
+  font-size:13px; text-align:center; flex-wrap:wrap;
+}
+.data-banner.hidden{display:none;}
+.data-banner button{
+  border:1px solid var(--down); color:var(--down); background:transparent;
+  border-radius:var(--radius); padding:4px 12px; font-size:12px;
+}
+.data-banner button:hover{background:var(--down); color:var(--bg-deep);}
+
 /* ---------- Layout ---------- */
 .app-shell{display:flex; gap:0; align-items:flex-start; min-height:calc(100vh - 54px);}
 .sidebar{

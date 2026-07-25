@@ -9,6 +9,9 @@
   let refreshTimer = null;
   let countdownTimer = null;
   let nextRefreshAt = null;
+  let quickRetryCount = 0;
+  const MAX_QUICK_RETRIES = 3;
+  const QUICK_RETRY_MS = 20000; // 20s — used only when data totally fails to load
 
   // ---------------- Init ----------------
   document.addEventListener("DOMContentLoaded", init);
@@ -34,6 +37,7 @@
     document.getElementById("closeDrawerBtn").addEventListener("click", closeDrawer);
     document.getElementById("drawerOverlay").addEventListener("click", closeDrawer);
     document.getElementById("removeSymbolBtn").addEventListener("click", handleRemoveActive);
+    document.getElementById("dataBannerRetry").addEventListener("click", () => refreshEverything());
   }
 
   async function handleAddSymbol() {
@@ -90,7 +94,36 @@
     renderCommodities();
     if (activeDrawerYahoo) renderDrawer(activeDrawerYahoo);
 
-    setSyncStatus("live");
+    const gotAnyData = Object.keys(liveData).length > 0;
+
+    if (gotAnyData) {
+      quickRetryCount = 0;
+      hideDataBanner();
+      setSyncStatus("live");
+    } else {
+      setSyncStatus("stale");
+      const reason = AiBirfAPI.getLastError() || "Unknown error";
+      showDataBanner(reason);
+
+      // Self-heal: retry sooner a few times (e.g. a transient host/network
+      // hiccup) before settling back into the normal 10-minute cadence.
+      if (quickRetryCount < MAX_QUICK_RETRIES) {
+        quickRetryCount++;
+        setTimeout(refreshEverything, QUICK_RETRY_MS);
+      }
+    }
+  }
+
+  function showDataBanner(reason) {
+    const banner = document.getElementById("dataBanner");
+    const text = document.getElementById("dataBannerText");
+    text.textContent = `Market data isn't loading (${reason}). If this doesn't clear up, open ` +
+      `${APP_CONFIG.PROXY_URL}?health=1 in your browser to see why.`;
+    banner.classList.remove("hidden");
+  }
+
+  function hideDataBanner() {
+    document.getElementById("dataBanner").classList.add("hidden");
   }
 
   function scheduleAutoRefresh() {
@@ -120,12 +153,17 @@
   function setSyncStatus(state) {
     const status = document.getElementById("syncStatus");
     const dot = document.getElementById("syncDot");
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
     if (state === "syncing") {
       status.textContent = "Syncing…";
       dot.classList.add("stale");
+    } else if (state === "stale") {
+      status.textContent = `Data unavailable · retrying`;
+      dot.classList.add("stale");
     } else {
-      const now = new Date();
-      status.textContent = `Live · ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      status.textContent = `Live · ${timeStr}`;
       dot.classList.remove("stale");
     }
   }
